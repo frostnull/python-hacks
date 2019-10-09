@@ -1,6 +1,6 @@
 import socket,os
 
-
+## example file, change this
 IP = '192.168.25.225'
 PORT = 4444
 
